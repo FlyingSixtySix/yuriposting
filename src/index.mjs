@@ -8,7 +8,7 @@ const mastodonHeaders = {
 // 1. Fetch post from Danbooru
 
 const danbooruAuthTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DANBOORU_USERNAME}`;
-const danbooruTags = `yuri (rating:general or rating:sensitive) status:active upvotes:>10 order:random -is:banned`;
+const danbooruTags = `yuri (rating:general or rating:sensitive) status:active upvotes:>=10 order:random -is:banned -meme`;
 
 const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
 const danbooruPost = (await danbooruResponse.json())[0];
