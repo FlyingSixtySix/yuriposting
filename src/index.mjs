@@ -8,7 +8,7 @@ const mastodonHeaders = {
 // 1. Fetch post from Danbooru
 
 const danbooruAuthTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DANBOORU_USERNAME}`;
-const danbooruTags = `yuri (rating:general or rating:sensitive) status:active upvotes:>=10 order:random -is:banned -meme`;
+const danbooruTags = `yuri rating:general status:active upvotes:>=10 order:random -is:banned -meme`;
 
 const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
 const danbooruPost = (await danbooruResponse.json())[0];
@@ -89,7 +89,7 @@ const postFormData = new FormData();
 postFormData.append('status', postFormat);
 postFormData.append('visibility', 'public');
 postFormData.append('media_ids[]', mediaId);
-// postFormData.append('sensitive', isSensitive);
+postFormData.append('sensitive', isSensitive);
 
 const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
     headers: mastodonHeaders,
