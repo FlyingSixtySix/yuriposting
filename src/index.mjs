@@ -69,7 +69,7 @@ Source: ${source}
 const postFormData = new FormData();
 // postFormData.append('status', `Yuri!\n\nSource: ${danbooruPost.source}`);
 postFormData.append('status', postFormat);
-postFormData.append('visibility', 'private');
+postFormData.append('visibility', 'public');
 postFormData.append('media_ids[]', mediaId);
 
 const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
