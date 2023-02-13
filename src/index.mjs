@@ -12,6 +12,23 @@ const danbooruTags = `yuri (rating:general or rating:sensitive) status:active up
 
 const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
 const danbooruPost = (await danbooruResponse.json())[0];
+const isSensitive = true;
+let rating = 'Unknown';
+switch (danbooruPost.rating) {
+    case 'g':
+        rating = 'General';
+        isSensitive = false;
+        break;
+    case 's':
+        rating = 'Sensitive';
+        break;
+    case 'q':
+        rating = 'Questionable';
+        break;
+    case 'e':
+        rating = 'Explicit';
+        break;
+}
 
 console.log('-'.repeat(80));
 console.log('Danbooru Post');
@@ -64,6 +81,7 @@ const source = danbooruPost.pixiv_id ? `https://www.pixiv.net/en/artworks/${danb
 const postFormat = `
 Artist${danbooruArtists.length > 1 ? 's' : ''}: ${artists}
 Source: ${source}
+Rating: ${rating}
 `.trim();
 
 const postFormData = new FormData();
@@ -71,6 +89,7 @@ const postFormData = new FormData();
 postFormData.append('status', postFormat);
 postFormData.append('visibility', 'public');
 postFormData.append('media_ids[]', mediaId);
+postFormData.append('sensitive', isSensitive);
 
 const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
     headers: mastodonHeaders,
