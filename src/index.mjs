@@ -12,7 +12,7 @@ const danbooruTags = `yuri rating:general status:active upvotes:>=10 order:rando
 
 const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
 const danbooruPost = (await danbooruResponse.json())[0];
-const isSensitive = true;
+let isSensitive = true;
 let rating = 'Unknown';
 switch (danbooruPost.rating) {
     case 'g':
