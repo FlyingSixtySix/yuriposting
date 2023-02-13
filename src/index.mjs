@@ -89,7 +89,7 @@ const postFormData = new FormData();
 postFormData.append('status', postFormat);
 postFormData.append('visibility', 'public');
 postFormData.append('media_ids[]', mediaId);
-postFormData.append('sensitive', isSensitive);
+// postFormData.append('sensitive', isSensitive);
 
 const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
     headers: mastodonHeaders,
