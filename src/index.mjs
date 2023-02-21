@@ -12,6 +12,9 @@ const danbooruTags = `yuri rating:general status:active upvotes:>=10 order:rando
 
 const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
 const danbooruPost = (await danbooruResponse.json())[0];
+
+const friendlyTags = danbooruPost.tag_string.split(' ').join(', ').split('_').join(' ');
+
 let isSensitive = true;
 let rating = 'Unknown';
 switch (danbooruPost.rating) {
@@ -58,6 +61,7 @@ const fileResponse = await fetch(danbooruPost.file_url);
 
 const mediaFormData = new FormData();
 mediaFormData.append('file', await fileResponse.blob());
+mediaFormData.append('description', 'Danbooru tags: ' + friendlyTags);
 
 const mediaResponse = await fetch('https://botsin.space/api/v2/media', {
     headers: mastodonHeaders,
