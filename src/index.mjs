@@ -1,110 +1,129 @@
 import dotenv from 'dotenv';
+import Jimp from 'jimp';
 dotenv.config();
 
 const mastodonHeaders = {
     Authorization: `Bearer ${process.env.MASTODON_ACCESS_TOKEN}`,
 };
 
-// 1. Fetch post from Danbooru
+const authTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DANBOORU_USERNAME}`;
 
-const danbooruAuthTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DANBOORU_USERNAME}`;
-const danbooruTags = `yuri rating:general status:active upvotes:>=10 order:random -is:banned -meme`;
+async function main() {
+    const tags = `yuri rating:general status:active upvotes:>=10 order:random -is:banned -meme`;
+    const post = await fetchRandomPost(tags);
+    const postTags = post.tag_string.split(' ').join(', ').split('_').join(' ');
+    const isSensitive = post.rating !== 'g';
+    const rating = {
+        g: 'General',
+        s: 'Sensitive',
+        q: 'Questionable',
+        e: 'Explicit',
+    }[post.rating] || 'Unknown';
+    log('Danbooru Post', post);
 
-const danbooruResponse = await fetch(`https://danbooru.donmai.us/posts.json?${danbooruAuthTags}&tags=${danbooruTags.split(' ').join('+')}&limit=1`);
-const danbooruPost = (await danbooruResponse.json())[0];
+    const artists = await fetchArtistNames(post.tag_string_artist);
+    log('Danbooru Artists', artists);
 
-const friendlyTags = danbooruPost.tag_string.split(' ').join(', ').split('_').join(' ');
+    const img = await fetchFileSource(post.file_url);
+    log('File Buffer', img.getWidth() + 'x' + img.getHeight());
 
-let isSensitive = true;
-let rating = 'Unknown';
-switch (danbooruPost.rating) {
-    case 'g':
-        rating = 'General';
-        isSensitive = false;
-        break;
-    case 's':
-        rating = 'Sensitive';
-        break;
-    case 'q':
-        rating = 'Questionable';
-        break;
-    case 'e':
-        rating = 'Explicit';
-        break;
+    const mediaId = await uploadMedia(img, postTags);
+    log('Mastodon Media', mediaId);
+
+    const status = await postToMastodon(post, isSensitive, rating, artists, mediaId);
+    log('Mastodon Status', status);
 }
 
-console.log('-'.repeat(80));
-console.log('Danbooru Post');
-console.log('-'.repeat(80));
-console.log();
-console.log(danbooruPost);
-console.log();
+await main();
 
-// 1 and a half. Fetch artist name from Danbooru
+/**
+ * Fetches a random post from Danbooru with the given tags.
+ */
+async function fetchRandomPost(searchTags) {
+    const res = await fetch(`https://danbooru.donmai.us/posts.json?${authTags}&tags=${searchTags.split(' ').join('+')}&limit=1`);
+    return (await res.json())[0];
+}
 
-const danbooruArtistResponse = await fetch(`https://danbooru.donmai.us/artists.json?${danbooruAuthTags}&search[name]=${danbooruPost.tag_string_artist.split(' ').join('+')}`);
-const danbooruArtists = await danbooruArtistResponse.json();
-const artists = danbooruArtists.map(artist => artist.name.replaceAll('_', ' ')).join(', ');
+/**
+ * Fetches the artist's name(s) from Danbooru.
+ */
+async function fetchArtistNames(name) {
+    const danbooruArtistResponse = await fetch(`https://danbooru.donmai.us/artists.json?${authTags}&search[name]=${name.split(' ').join('+')}`);
+    const danbooruArtists = await danbooruArtistResponse.json();
+    return danbooruArtists.map(artist => artist.name.replaceAll('_', ' ')).join(', ');
+}
 
-console.log('-'.repeat(80));
-console.log('Danbooru Artists');
-console.log('-'.repeat(80));
-console.log();
-console.log(danbooruArtists);
-console.log();
+/**
+ * Fetches the image URL and converts to JPEG with 95% quality.
+ */
+async function fetchFileSource(url) {
+    const img = await Jimp.read(url);
+    img.quality(95);
+    return img;
+}
 
-// 2. Fetch file source from Danbooru
+/**
+ * Uploads the image to Mastodon.
+ */
+async function uploadMedia(img, postTags, retryCount = 0) {
+    const mediaFormData = new FormData();
+    mediaFormData.append('file', await img.getBufferAsync(Jimp.MIME_JPEG).then(buffer => new Blob([buffer], { type: 'image/jpeg' })));
+    mediaFormData.append('description', 'Danbooru tags: ' + postTags);
 
-const fileResponse = await fetch(danbooruPost.file_url);
+    const mediaResponse = await fetch('https://botsin.space/api/v2/media', {
+        headers: mastodonHeaders,
+        method: 'POST',
+        body: mediaFormData,
+    });
 
-// 3. Upload file to Mastodon
+    const mediaResponseJson = await mediaResponse.json();
 
-const mediaFormData = new FormData();
-mediaFormData.append('file', await fileResponse.blob());
-mediaFormData.append('description', 'Danbooru tags: ' + friendlyTags);
+    if (mediaResponseJson.error) {
+        console.error(mediaResponseJson.error);
+        if (mediaResponseJson.error.includes('processing thumbnail')) {
+            if (retryCount > 5) {
+                throw new Error('Failed to upload media after 5 retries.');
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000));
 
-const mediaResponse = await fetch('https://botsin.space/api/v2/media', {
-    headers: mastodonHeaders,
-    method: 'POST',
-    body: mediaFormData,
-});
-const mediaResponseJson = await mediaResponse.json();
-const mediaId = mediaResponseJson.id;
+            // Retry
+            return uploadMedia(img, postTags, retryCount + 1);
+        }
+        throw new Error(mediaResponseJson.error);
+    }
 
-console.log('-'.repeat(80));
-console.log('Media Response');
-console.log('-'.repeat(80));
-console.log();
-console.log(mediaResponseJson);
-console.log();
+    const mediaId = mediaResponseJson.id;
+    return mediaId;
+}
 
-// 4. Post to Mastodon
+/**
+ * Creates a post on Mastodon.
+ */
+async function postToMastodon(post, isSensitive, rating, artists, mediaId) {
+    const source = post.pixiv_id ? `https://www.pixiv.net/en/artworks/${post.pixiv_id}` : post.source;
 
-const source = danbooruPost.pixiv_id ? `https://www.pixiv.net/en/artworks/${danbooruPost.pixiv_id}` : danbooruPost.source;
+    const postFormat = `Artist${artists.length > 1 ? 's' : ''}: ${artists}\nSource: ${source}\nRating: ${rating}`;
+    
+    const postFormData = new FormData();
+    // postFormData.append('status', `Yuri!\n\nSource: ${post.source}`);
+    postFormData.append('status', postFormat);
+    postFormData.append('visibility', 'public');
+    postFormData.append('media_ids[]', mediaId);
+    postFormData.append('sensitive', isSensitive);
+    
+    const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
+        headers: mastodonHeaders,
+        method: 'POST',
+        body: postFormData,
+    });
+    return postResponse.json();
+}
 
-const postFormat = `
-Artist${danbooruArtists.length > 1 ? 's' : ''}: ${artists}
-Source: ${source}
-Rating: ${rating}
-`.trim();
-
-const postFormData = new FormData();
-// postFormData.append('status', `Yuri!\n\nSource: ${danbooruPost.source}`);
-postFormData.append('status', postFormat);
-postFormData.append('visibility', 'public');
-postFormData.append('media_ids[]', mediaId);
-postFormData.append('sensitive', isSensitive);
-
-const postResponse = await fetch('https://botsin.space/api/v1/statuses', {
-    headers: mastodonHeaders,
-    method: 'POST',
-    body: postFormData,
-});
-const postResponseJson = await postResponse.json();
-
-console.log('-'.repeat(80));
-console.log('Post Response');
-console.log('-'.repeat(80));
-console.log();
-console.log(postResponseJson);
-console.log();
+async function log(section, data) {
+    console.log('-'.repeat(80));
+    console.log(section);
+    console.log('-'.repeat(80));
+    console.log();
+    console.log(data);
+    console.log();
+}
