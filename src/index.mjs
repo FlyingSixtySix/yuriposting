@@ -1,6 +1,8 @@
+import { writeFileSync } from 'fs';
 import dotenv from 'dotenv';
 import Jimp from 'jimp';
 dotenv.config();
+import postHistory from '../posthistory.json' assert { type: 'json' };
 
 const mastodonHeaders = {
     Authorization: `Bearer ${process.env.MASTODON_ACCESS_TOKEN}`,
@@ -10,7 +12,16 @@ const authTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DA
 
 async function main() {
     const tags = `yuri rating:general status:active upvotes:>=10 order:random -is:banned -meme`;
-    const post = await fetchRandomPost(tags);
+    let uniquePost = false;
+    let post;
+    while (!uniquePost) {
+        post = await fetchRandomPost(tags);
+        if (!postHistory.includes(post.id)) {
+            postHistory.push(post.id);
+            uniquePost = true;
+        }
+    }
+    writeFileSync('./posthistory.json', JSON.stringify(postHistory, null, 4));
     const postTags = post.tag_string.split(' ').join(', ').split('_').join(' ');
     const isSensitive = post.rating !== 'g';
     const rating = {
