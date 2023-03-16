@@ -113,7 +113,7 @@ async function uploadMedia(img, postTags, retryCount = 0) {
 async function postToMastodon(post, isSensitive, rating, artists, mediaId) {
     const source = post.pixiv_id ? `https://www.pixiv.net/en/artworks/${post.pixiv_id}` : post.source;
 
-    const postFormat = `Artist${artists.length > 1 ? 's' : ''}: ${artists}\nSource: ${source}\nRating: ${rating}`;
+    const postFormat = `Artist${artists.length > 1 ? 's' : ''}: ${artists}\nSource: ${source}`;
     
     const postFormData = new FormData();
     // postFormData.append('status', `Yuri!\n\nSource: ${post.source}`);
