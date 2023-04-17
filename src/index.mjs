@@ -11,7 +11,17 @@ const mastodonHeaders = {
 const authTags = `api_key=${process.env.DANBOORU_API_KEY}&login=${process.env.DANBOORU_USERNAME}`;
 
 async function main() {
-    const tags = `yuri rating:general status:active upvotes:>=10 order:random -is:banned -meme -baalbuddy -nazi`;
+    const tags = [
+        'yuri',
+        'rating:general',
+        'status:active',
+        'upvotes:>=10',
+        'order:random',
+        '-is:banned',
+        '-meme',
+        '-baalbuddy',
+        '-nazi',
+    ].join(' ');
     let uniquePost = false;
     let post;
     while (!uniquePost) {
